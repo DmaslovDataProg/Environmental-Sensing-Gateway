@@ -1,68 +1,57 @@
 #include <Arduino.h>
+#include <Wire.h>
 #include <Adafruit_BME280.h>
 
-/* Environmental and Power Management Logic */
-
-// The BME280 sensor instance is initialized
+// The BME280 instance is initialized
 Adafruit_BME280 bme; 
 
-// System constants are defined
-#define BATTERY_CAP_MAH 2000.0
-#define ACTIVE_CURRENT_MA 80.0
-#define SLEEP_INTERVAL_MS 10000
+/**
+ * The system is initialized.
+ * The I2C bus is scanned for the BME280 at both possible addresses.
+ */
+void setup() {
+    Serial.begin(115200);
+    Wire.begin(21, 22);
+    Wire.setClock(100000); // Forces the bus to 100kHz (Slow and Stable)
+    delay(2000); // The system is given time to stabilize
+    Serial.println("--- BME280 Diagnostic Start ---");
 
-// Cumulative power consumption is tracked
-float totalConsumed_mAs = 0;
+    // The I2C bus is initialized
+    Wire.begin(21, 22); // SDA on 21, SCL on 22
+
+    // Attempt 1: Address 0x76
+    if (bme.begin(0x76)) {
+        Serial.println("Sensor found at 0x76");
+    } 
+    // Attempt 2: Address 0x77
+    else if (bme.begin(0x77)) {
+        Serial.println("Sensor found at 0x77");
+    } 
+    else {
+        Serial.println("Error: Sensor not found at 0x76 or 0x77.");
+        Serial.println("Check SDA/SCL wiring and power.");
+        while (1); // The execution is halted if no sensor is detected
+    }
+}
 
 /**
- * The sensor task is executed as a separate FreeRTOS thread.
- * Environmental data is sampled and autonomy is estimated.+
+ * The sensing loop is executed.
+ * Raw data is extracted and outputted via the UART interface.
  */
-void vSensorTask(void *pvParameters) {
-    for(;;) {
-        // The start time of the sampling cycle is recorded
-        unsigned long startTime = millis();
-        
-        // Temperature and pressure are read from the I2C bus
-        float temp = bme.readTemperature();
-        float pres = bme.readPressure() / 100.0F;
-
-        // The duration of active processing is calculated
-        unsigned long activeTime = millis() - startTime;
-        
-        // Power consumption is updated based on active and idle states
-        totalConsumed_mAs += (activeTime / 1000.0) * ACTIVE_CURRENT_MA;
-        totalConsumed_mAs += (SLEEP_INTERVAL_MS / 1000.0) * 0.05; // 50uA sleep estimate
-
-        // Remaining battery capacity and system durability are estimated
-        float remaining_mAh = BATTERY_CAP_MAH - (totalConsumed_mAs / 3600.0);
-        float days_left = (remaining_mAh / (ACTIVE_CURRENT_MA / 24.0));
-
-        // System telemetry is outputted to the serial interface
-        Serial.printf("--- SENSOR DATA ---\n");
-        Serial.printf("Ambient Temp: %.2f C\n", temp);
-        Serial.printf("Air Pressure: %.2f hPa\n", pres);
-        Serial.printf("Est. Autonomy: %.1f Days\n", days_left);
-        Serial.printf("-------------------\n");
-
-        // The task is suspended for the defined interval
-        vTaskDelay(pdMS_TO_TICKS(SLEEP_INTERVAL_MS));
-    }
-}
-
-void setup() {
-    // The serial communication is initialized at 115200 baud
-    Serial.begin(115200);
-    
-    // The I2C interface for the BME280 is verified
-    if (!bme.begin(0x76)) {
-        Serial.println("Sensor initialization failed.");
-    }
-
-    // The sensing task is created within the FreeRTOS scheduler
-    xTaskCreate(vSensorTask, "Sensor_Logic", 4096, NULL, 1, NULL);
-}
-
 void loop() {
-    // The main loop is left empty as task management is handled by FreeRTOS
+    // Atmospheric data is retrieved
+    float temperature = bme.readTemperature();
+    float pressure = bme.readPressure() / 100.0F;
+    float humidity = bme.readHumidity();
+
+    // Data is outputted for Serial Monitor and Logic Analyzer
+    Serial.print("T:");
+    Serial.print(temperature);
+    Serial.print(" P:");
+    Serial.print(pressure);
+    Serial.print(" H:");
+    Serial.println(humidity);
+
+    // A 2-second delay is implemented between samples
+    delay(2000);
 }

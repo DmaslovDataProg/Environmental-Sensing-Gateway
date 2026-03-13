@@ -1,3 +1,6 @@
+// Uno reads the ultrasound sensor and sends the readings as strings by TX and RX to LLC
+// Author: Dmytro Maslov, Porto, Portugal
+// Hardware: Arduino Uno R3, HC-SR04, tsx0108e between Uno and Esp32
 #include <Arduino.h>
 
 /* Sensor Node Hardware Configuration */

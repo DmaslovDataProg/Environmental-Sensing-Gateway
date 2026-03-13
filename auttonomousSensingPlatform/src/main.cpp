@@ -1,57 +1,80 @@
+// Application of autonomy calculation, 
+// In connection with the LLC and with Uno board
+// Author: Dmytro Maslov, Porto, Portugal
+// Hardware: esp32 devkitc-v1, bme-280, tsx0108e between Uno and Esp32
 #include <Arduino.h>
-#include <Wire.h>
+#include <HardwareSerial.h>
 #include <Adafruit_BME280.h>
 
-// The BME280 instance is initialized
-Adafruit_BME280 bme; 
+// UART2 is utilized for the 3.3V/5V bridge to the Arduino
+HardwareSerial ArduinoNode(2); 
+Adafruit_BME280 bme;
 
-/**
- * The system is initialized.
- * The I2C bus is scanned for the BME280 at both possible addresses.
- */
+// System states for the autonomous manager
+enum SystemState { STATE_IDLE, STATE_ALERT };
+SystemState currentState = STATE_IDLE;
+
+// Power management variables for autonomy to validate the remaining time
+const float BATTERY_CAP_MAH = 2000.0; // arbitrary value
+float totalConsumed_mAs = 0;
+
 void setup() {
     Serial.begin(115200);
+    
+    // I2C communication is initialized on GPIO 21 (SDA) and GPIO 22 (SCL)
     Wire.begin(21, 22);
-    Wire.setClock(100000); // Forces the bus to 100kHz (Slow and Stable)
-    delay(2000); // The system is given time to stabilize
-    Serial.println("--- BME280 Diagnostic Start ---");
+    Wire.setClock(100000); // 100kHz is enforced for signal integrity
 
-    // The I2C bus is initialized
-    Wire.begin(21, 22); // SDA on 21, SCL on 22
-
-    // Attempt 1: Address 0x76
-    if (bme.begin(0x76)) {
-        Serial.println("Sensor found at 0x76");
-    } 
-    // Attempt 2: Address 0x77
-    else if (bme.begin(0x77)) {
-        Serial.println("Sensor found at 0x77");
-    } 
-    else {
-        Serial.println("Error: Sensor not found at 0x76 or 0x77.");
-        Serial.println("Check SDA/SCL wiring and power.");
-        while (1); // The execution is halted if no sensor is detected
+    // UART2 is configured at 9600 baud for LLC interface (RX=16, TX=17)
+    ArduinoNode.begin(9600, SERIAL_8N1, 16, 17); // on the used board pins are RX2 and TX2, accordingly
+    
+    // The BME280 sensor is initialized at address 0x76
+    if (!bme.begin(0x76)) {
+        Serial.println("SYSTEM_ERROR: BME280 initialization failed.");
     }
+    
+    Serial.println("SYSTEM_BOOT: Autonomous Gateway Online.");
 }
 
-/**
- * The sensing loop is executed.
- * Raw data is extracted and outputted via the UART interface.
- */
 void loop() {
-    // Atmospheric data is retrieved
-    float temperature = bme.readTemperature();
-    float pressure = bme.readPressure() / 100.0F;
-    float humidity = bme.readHumidity();
+    // Incoming UART telemetry is monitored
+    if (ArduinoNode.available()) {
+        String msg = ArduinoNode.readStringUntil('\n');
+        msg.trim();
 
-    // Data is outputted for Serial Monitor and Logic Analyzer
-    Serial.print("T:");
-    Serial.print(temperature);
-    Serial.print(" P:");
-    Serial.print(pressure);
-    Serial.print(" H:");
-    Serial.println(humidity);
+        if (msg.startsWith("DIST:")) {
+            int distance = msg.substring(5).toInt();
+            Serial.printf("[SENSOR_NODE] Acoustic Range: %d cm\n", distance);
+            
+            // The state is transitioned if proximity thresholds are violated
+            // This siumlates the eternal physical trigger of a target proximity, 
+            // where target might be a whale, ship or other platform
+            if (distance > 0 && distance < 30) currentState = STATE_ALERT;
+        }
+    }
 
-    // A 2-second delay is implemented between samples
-    delay(2000);
+    // State machine execution
+    if (currentState == STATE_ALERT) {
+        Serial.println("[ALARM] Proximity violation detected.");
+        
+        // Environmental context is captured during the alert event
+        // Insted of temperature reading, other physical reading might be implemented, 
+        // such as light condition, humidity, time, etc
+        float temp = bme.readTemperature();
+        Serial.printf("[LOG] Event Temperature: %.2f C\n", temp);
+
+        // System returns to IDLE after logging
+        currentState = STATE_IDLE;
+    }
+
+    // Autonomy calculation is updated (Simulated current draw tracking)
+    totalConsumed_mAs += (10.0 / 1000.0) * 80.0; // Estimate per loop iteration
+    float days_left = (BATTERY_CAP_MAH - (totalConsumed_mAs / 3600.0)) / (80.0 / 24.0);
+    
+    // Periodic system heartbeat
+    static uint32_t lastPrint = 0;
+    if (millis() - lastPrint > 5000) {
+        Serial.printf("[STATUS] Autonomy: %.1f Days | System: OK\n", days_left);
+        lastPrint = millis();
+    }
 }

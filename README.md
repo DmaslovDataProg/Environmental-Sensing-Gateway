@@ -1,4 +1,6 @@
 # Environmental-Sensing-Gateway
+[![PlatformIO CI](https://github.com/DmaslovDataProg/Environmental-Sensing-Gateway/actions/workflows/main.yml/badge.svg)](https://github.com/DmaslovDataProg/Environmental-Sensing-Gateway/actions/workflows/main.yml)
+
 This repository describes the process of building a multi-processor embedded network (ESP32/Arduino Uno) utilizing Real-Time Operating Systems (FreeRTOS) and validating hardware communication via logic-level protocol analysis. The gateway function is perfromed using ESP32 and the sensing node with the ultrasonic sensor is set on Uno.
 ![demo assembly](https://github.com/DmaslovDataProg/Environmental-Sensing-Gateway/blob/main/systemView01.jpg)
 
@@ -30,3 +32,4 @@ Repeat the same process for Uno board, however note that the baudrate selected i
 ## Lessons Learned 
 - A critical 4.2V back-feeding leak was identified on the 3.3V I2C bus during multi-rail integration. The issue was diagnosed via logic analyzer and resolved by isolating the LLC bias rail from the primary power supply.
 - The description on the BME280 sensor is misleading, as the SCL and SDA pins swapped in reality, which was very complex to debug. 
+

@@ -34,5 +34,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install --upgrade platformio
 
-      - name: Run PlatformIO Build
-        run: pio run
+      - name: Build ESP32 Gateway
+        run: pio run -d ./auttonomousSensingPlatform
+
+      - name: Build Arduino Uno Node
+        run: pio run -d ./sensingNode
